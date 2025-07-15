@@ -8,7 +8,17 @@ import User from './models/User.js';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://chat-app-frontend-93hn.vercel.app",
+        "https://chat-app-frontend-93hn.vercel.app/"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+}));
 app.use(express.json());
 
 // Health check endpoint
@@ -26,9 +36,14 @@ mongoose.connect(mongoUri)
 const io = new Server(server, {
     cors: {
         origin: [
-            "https://chat-app-frontend-93hn.vercel.app/", // actual 
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://chat-app-frontend-93hn.vercel.app",
+            "https://chat-app-frontend-93hn.vercel.app/"
         ],
         methods: ["GET", "POST"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+        credentials: true
     }
 })
 
@@ -117,4 +132,13 @@ const port = process.env.PORT || 3000;
 
 server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${port} is busy, trying port ${port + 1}`);
+        server.listen(port + 1, () => {
+            console.log(`Server is running on port ${port + 1}`);
+        });
+    } else {
+        console.error('Server error:', err);
+    }
 });

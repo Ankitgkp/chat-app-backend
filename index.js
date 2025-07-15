@@ -11,16 +11,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 const server = http.createServer(app);
 
-const mongoUri = 'mongodb+srv://ankit_user:B5h0sd4kyx@cluster0.ajc6xcq.mongodb.net/chatapp';
+const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://ankit_user:B5h0sd4kyx@cluster0.ajc6xcq.mongodb.net/chatapp';
 mongoose.connect(mongoUri)
     .then(() => console.log('Connected to MongoDB'))
     .catch((err) => console.error('MongoDB connection error:', err));
 
 const io = new Server(server, {
     cors: {
-        origin: ["http://localhost:5173"],
+        origin: [
+            "http://localhost:5173", // local
+            "https://chat-app-frontend-93hn.vercel.app/", // actual 
+        ],
         methods: ["GET", "POST"],
     }
 })
@@ -106,7 +114,7 @@ io.on("connection", (socket) => {
     })
 })
 
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 server.listen(port, () => {
     console.log(`Server is running on port ${port}`);

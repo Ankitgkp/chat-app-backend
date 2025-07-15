@@ -26,7 +26,6 @@ mongoose.connect(mongoUri)
 const io = new Server(server, {
     cors: {
         origin: [
-            "http://localhost:5173", // local
             "https://chat-app-frontend-93hn.vercel.app/", // actual 
         ],
         methods: ["GET", "POST"],

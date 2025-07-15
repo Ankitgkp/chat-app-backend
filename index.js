@@ -9,17 +9,68 @@ import User from './models/User.js';
 const app = express();
 
 app.use(cors({
-    origin: [
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://chat-app-frontend-93hn.vercel.app",
+            "https://chat-app-frontend-93hn.vercel.app/",
+            // Add any Render backend URL here when you deploy
+            /^https:\/\/.*\.onrender\.com$/,
+            /^https:\/\/.*\.vercel\.app$/
+        ];
+        
+        const isAllowed = allowedOrigins.some(allowedOrigin => {
+            if (typeof allowedOrigin === 'string') {
+                return allowedOrigin === origin;
+            } else if (allowedOrigin instanceof RegExp) {
+                return allowedOrigin.test(origin);
+            }
+            return false;
+        });
+        
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            console.log('CORS blocked origin:', origin);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true,
+    optionsSuccessStatus: 200
+}));
+app.use(express.json());
+
+// Additional CORS headers middleware
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedOrigins = [
         "http://localhost:3000",
         "http://localhost:5173",
         "https://chat-app-frontend-93hn.vercel.app",
         "https://chat-app-frontend-93hn.vercel.app/"
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
-}));
-app.use(express.json());
+    ];
+    
+    if (allowedOrigins.includes(origin) || /^https:\/\/.*\.vercel\.app$/.test(origin) || /^https:\/\/.*\.onrender\.com$/.test(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+    
+    next();
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -35,14 +86,37 @@ mongoose.connect(mongoUri)
 
 const io = new Server(server, {
     cors: {
-        origin: [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "https://chat-app-frontend-93hn.vercel.app",
-            "https://chat-app-frontend-93hn.vercel.app/"
-        ],
+        origin: function (origin, callback) {
+            // Allow requests with no origin
+            if (!origin) return callback(null, true);
+            
+            const allowedOrigins = [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "https://chat-app-frontend-93hn.vercel.app",
+                "https://chat-app-frontend-93hn.vercel.app/",
+                /^https:\/\/.*\.onrender\.com$/,
+                /^https:\/\/.*\.vercel\.app$/
+            ];
+            
+            const isAllowed = allowedOrigins.some(allowedOrigin => {
+                if (typeof allowedOrigin === 'string') {
+                    return allowedOrigin === origin;
+                } else if (allowedOrigin instanceof RegExp) {
+                    return allowedOrigin.test(origin);
+                }
+                return false;
+            });
+            
+            if (isAllowed) {
+                callback(null, true);
+            } else {
+                console.log('Socket.IO CORS blocked origin:', origin);
+                callback('CORS Error');
+            }
+        },
         methods: ["GET", "POST"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
         credentials: true
     }
 })

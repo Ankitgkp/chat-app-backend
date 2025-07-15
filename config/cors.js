@@ -1,4 +1,3 @@
-// CORS configuration
 const allowedOrigins = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -18,7 +17,7 @@ export const corsOptions = {
                 allowedOrigin.test(origin);
         });
 
-        callback(null, true); // Allow all for debugging
+        callback(null, true); 
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],

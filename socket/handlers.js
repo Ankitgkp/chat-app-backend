@@ -10,7 +10,6 @@ export function setupSocketHandlers(io) {
             timestamp: new Date().toISOString()
         });
 
-        // Room management
         socket.on("join_room", async (room) => {
             socket.join(room);
             console.log(`User ${socket.id} joined room: ${room}`);
@@ -25,12 +24,9 @@ export function setupSocketHandlers(io) {
             }
         });
 
-        // Health check
         socket.on("ping", () => {
             socket.emit("pong", { timestamp: new Date().toISOString() });
         });
-
-        // Message handlers
         socket.on("send_message", async (data) => {
             await saveMessage(data, 'text');
             socket.to(data.room).emit("message_recieve", data);
@@ -62,7 +58,6 @@ export function setupSocketHandlers(io) {
     });
 }
 
-// Helper functions
 async function saveMessage(data, type, mediaData = null) {
     try {
         const newMessage = new Message({

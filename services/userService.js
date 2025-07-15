@@ -1,7 +1,6 @@
 import { clerkClient } from '@clerk/clerk-sdk-node';
 import User from '../models/User.js';
 
-// Handle user creation/update
 export async function handleUserUpsert(userData) {
     try {
         const { id: clerkId, email_addresses, first_name, last_name, image_url, username } = userData;
@@ -28,7 +27,7 @@ export async function handleUserUpsert(userData) {
     }
 }
 
-// Handle user deletion
+
 export async function handleUserDelete(userData) {
     try {
         await User.findOneAndDelete({ clerkId: userData.id });
@@ -38,7 +37,7 @@ export async function handleUserDelete(userData) {
     }
 }
 
-// Sync user manually
+
 export async function syncUser(clerkId) {
     const clerkUser = await clerkClient.users.getUser(clerkId);
     await handleUserUpsert(clerkUser);

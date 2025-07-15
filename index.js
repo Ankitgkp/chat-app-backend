@@ -12,7 +12,7 @@ app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
+
         const allowedOrigins = [
             "http://localhost:3000",
             "http://localhost:5173",
@@ -22,7 +22,7 @@ app.use(cors({
             /^https:\/\/.*\.onrender\.com$/,
             /^https:\/\/.*\.vercel\.app$/
         ];
-        
+
         const isAllowed = allowedOrigins.some(allowedOrigin => {
             if (typeof allowedOrigin === 'string') {
                 return allowedOrigin === origin;
@@ -31,7 +31,7 @@ app.use(cors({
             }
             return false;
         });
-        
+
         if (isAllowed) {
             callback(null, true);
         } else {
@@ -55,26 +55,45 @@ app.use((req, res, next) => {
         "https://chat-app-frontend-93hn.vercel.app",
         "https://chat-app-frontend-93hn.vercel.app/"
     ];
-    
+
     if (allowedOrigins.includes(origin) || /^https:\/\/.*\.vercel\.app$/.test(origin) || /^https:\/\/.*\.onrender\.com$/.test(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
-    
+
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
+
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
-    
+
     next();
 });
 
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Keep-alive endpoint to prevent service from sleeping
+app.get('/keep-alive', (req, res) => {
+    res.status(200).json({
+        status: 'alive',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        connections: io.engine.clientsCount || 0
+    });
+});
+
+// Basic API endpoint for testing
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Chat App Backend is running!',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+    });
 });
 
 const server = http.createServer(app);
@@ -89,7 +108,7 @@ const io = new Server(server, {
         origin: function (origin, callback) {
             // Allow requests with no origin
             if (!origin) return callback(null, true);
-            
+
             const allowedOrigins = [
                 "http://localhost:3000",
                 "http://localhost:5173",
@@ -98,7 +117,7 @@ const io = new Server(server, {
                 /^https:\/\/.*\.onrender\.com$/,
                 /^https:\/\/.*\.vercel\.app$/
             ];
-            
+
             const isAllowed = allowedOrigins.some(allowedOrigin => {
                 if (typeof allowedOrigin === 'string') {
                     return allowedOrigin === origin;
@@ -107,7 +126,7 @@ const io = new Server(server, {
                 }
                 return false;
             });
-            
+
             if (isAllowed) {
                 callback(null, true);
             } else {
@@ -118,11 +137,28 @@ const io = new Server(server, {
         methods: ["GET", "POST"],
         allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
         credentials: true
-    }
+    },
+    // Add configuration for better reliability on Render
+    transports: ['polling', 'websocket'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    allowUpgrades: true,
+    perMessageDeflate: false,
+    httpCompression: false,
+    // Force polling transport initially (more reliable on Render free tier)
+    forceNew: true
 })
 
 io.on("connection", (socket) => {
-    console.log(socket.id + " connected");
+    console.log(`${socket.id} connected from ${socket.handshake.address}`);
+
+    // Send a welcome message to confirm connection
+    socket.emit("connection_confirmed", {
+        message: "Connected to server",
+        serverId: socket.id,
+        timestamp: new Date().toISOString()
+    });
 
     socket.on("join_room", async (data) => {
         socket.join(data)
@@ -138,6 +174,11 @@ io.on("connection", (socket) => {
             console.error('Error fetching previous messages:', error);
         }
     })
+
+    // Add ping/pong for connection health check
+    socket.on("ping", () => {
+        socket.emit("pong", { timestamp: new Date().toISOString() });
+    });
 
     socket.onAny((eventName, ...args) => {
         console.log(`Received event: ${eventName}`, args);

@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
         unique: true,
         sparse: true
     },
-    avatar: {
+    imageUrl: {  // Changed from 'avatar' to match Clerk's field name
         type: String,
         default: ''
     },
@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
-    lastLogin: {
+    lastActive: {  // Changed from 'lastLogin' to be more general
         type: Date,
         default: Date.now
     }

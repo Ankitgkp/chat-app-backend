@@ -3,6 +3,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import { clerkClient } from '@clerk/clerk-sdk-node';
 import Message from './models/Message.js';
 import User from './models/User.js';
 
@@ -96,6 +97,100 @@ app.get('/', (req, res) => {
         timestamp: new Date().toISOString(),
         version: '1.0.0'
     });
+});
+
+// Clerk webhook endpoint to sync users
+app.post('/api/clerk-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const payload = JSON.parse(req.body.toString());
+        const eventType = payload.type;
+
+        console.log('Clerk webhook received:', eventType);
+
+        switch (eventType) {
+            case 'user.created':
+            case 'user.updated':
+                await handleUserUpsert(payload.data);
+                break;
+            case 'user.deleted':
+                await handleUserDelete(payload.data);
+                break;
+            default:
+                console.log('Unhandled event type:', eventType);
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Webhook error:', error);
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
+});
+
+// Function to handle user creation/update
+async function handleUserUpsert(userData) {
+    try {
+        const clerkId = userData.id;
+        const email = userData.email_addresses?.[0]?.email_address || '';
+        const firstName = userData.first_name || '';
+        const lastName = userData.last_name || '';
+        const imageUrl = userData.image_url || '';
+        const username = userData.username || email.split('@')[0];
+
+        // Create or update user in MongoDB
+        const user = await User.findOneAndUpdate(
+            { clerkId: clerkId },
+            {
+                clerkId: clerkId,
+                email: email,
+                firstName: firstName,
+                lastName: lastName,
+                username: username,
+                imageUrl: imageUrl,
+                lastActive: new Date(),
+                updatedAt: new Date()
+            },
+            {
+                upsert: true,
+                new: true,
+                setDefaultsOnInsert: true
+            }
+        );
+
+        console.log('User synced:', user.email);
+    } catch (error) {
+        console.error('Error syncing user:', error);
+    }
+}
+
+// Function to handle user deletion
+async function handleUserDelete(userData) {
+    try {
+        const clerkId = userData.id;
+        await User.findOneAndDelete({ clerkId: clerkId });
+        console.log('User deleted:', clerkId);
+    } catch (error) {
+        console.error('Error deleting user:', error);
+    }
+}
+
+// API endpoint to manually sync a user (optional)
+app.post('/api/sync-user', async (req, res) => {
+    try {
+        const { clerkId } = req.body;
+
+        if (!clerkId) {
+            return res.status(400).json({ error: 'clerkId is required' });
+        }
+
+        // Fetch user from Clerk
+        const clerkUser = await clerkClient.users.getUser(clerkId);
+        await handleUserUpsert(clerkUser);
+
+        res.json({ success: true, message: 'User synced successfully' });
+    } catch (error) {
+        console.error('Manual sync error:', error);
+        res.status(500).json({ error: 'Failed to sync user' });
+    }
 });
 
 const server = http.createServer(app);
@@ -210,7 +305,7 @@ io.on("connection", (socket) => {
         try {
             // Check if photo data is too large
             if (data.photo && data.photo.length > 10 * 1024 * 1024) { // 10MB limit
-                socket.emit("upload_error", { 
+                socket.emit("upload_error", {
                     message: "Photo file too large. Maximum size is 10MB.",
                     type: "photo"
                 });
@@ -226,14 +321,14 @@ io.on("connection", (socket) => {
                 timestamp: new Date()
             });
             await newMessage.save();
-            
+
             // Emit to room members
             socket.to(data.room).emit("photo_recieve", data);
             // Confirm to sender
             socket.emit("upload_success", { type: "photo", messageId: newMessage._id });
         } catch (error) {
             console.error('Error saving photo:', error);
-            socket.emit("upload_error", { 
+            socket.emit("upload_error", {
                 message: "Failed to save photo. Please try again.",
                 type: "photo",
                 error: error.message
@@ -245,7 +340,7 @@ io.on("connection", (socket) => {
         try {
             // Check if video data is too large
             if (data.video && data.video.length > 20 * 1024 * 1024) { // 20MB limit
-                socket.emit("upload_error", { 
+                socket.emit("upload_error", {
                     message: "Video file too large. Maximum size is 20MB.",
                     type: "video"
                 });
@@ -261,14 +356,14 @@ io.on("connection", (socket) => {
                 timestamp: new Date()
             });
             await newMessage.save();
-            
+
             // Emit to room members
             socket.to(data.room).emit("video_recieve", data);
             // Confirm to sender
             socket.emit("upload_success", { type: "video", messageId: newMessage._id });
         } catch (error) {
             console.error('Error saving video:', error);
-            socket.emit("upload_error", { 
+            socket.emit("upload_error", {
                 message: "Failed to save video. Please try again.",
                 type: "video",
                 error: error.message

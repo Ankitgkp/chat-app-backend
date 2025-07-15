@@ -36,7 +36,8 @@ app.use(cors({
             callback(null, true);
         } else {
             console.log('CORS blocked origin:', origin);
-            callback(new Error('Not allowed by CORS'));
+            // Allow the request anyway for debugging (remove in production)
+            callback(null, true);
         }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -44,7 +45,8 @@ app.use(cors({
     credentials: true,
     optionsSuccessStatus: 200
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Additional CORS headers middleware
 app.use((req, res, next) => {
@@ -131,7 +133,8 @@ const io = new Server(server, {
                 callback(null, true);
             } else {
                 console.log('Socket.IO CORS blocked origin:', origin);
-                callback('CORS Error');
+                // Allow anyway for debugging
+                callback(null, true);
             }
         },
         methods: ["GET", "POST"],
@@ -146,6 +149,8 @@ const io = new Server(server, {
     allowUpgrades: true,
     perMessageDeflate: false,
     httpCompression: false,
+    // Increase max HTTP buffer size for file uploads
+    maxHttpBufferSize: 1e8, // 100MB
     // Force polling transport initially (more reliable on Render free tier)
     forceNew: true
 })
@@ -203,6 +208,15 @@ io.on("connection", (socket) => {
 
     socket.on("send_photo", async (data) => {
         try {
+            // Check if photo data is too large
+            if (data.photo && data.photo.length > 10 * 1024 * 1024) { // 10MB limit
+                socket.emit("upload_error", { 
+                    message: "Photo file too large. Maximum size is 10MB.",
+                    type: "photo"
+                });
+                return;
+            }
+
             const newMessage = new Message({
                 room: data.room,
                 author: data.author,
@@ -212,16 +226,32 @@ io.on("connection", (socket) => {
                 timestamp: new Date()
             });
             await newMessage.save();
+            
+            // Emit to room members
+            socket.to(data.room).emit("photo_recieve", data);
+            // Confirm to sender
+            socket.emit("upload_success", { type: "photo", messageId: newMessage._id });
         } catch (error) {
             console.error('Error saving photo:', error);
+            socket.emit("upload_error", { 
+                message: "Failed to save photo. Please try again.",
+                type: "photo",
+                error: error.message
+            });
         }
-
-        socket.to(data.room).emit("photo_recieve", data);
     })
 
     socket.on("send_video", async (data) => {
-
         try {
+            // Check if video data is too large
+            if (data.video && data.video.length > 20 * 1024 * 1024) { // 20MB limit
+                socket.emit("upload_error", { 
+                    message: "Video file too large. Maximum size is 20MB.",
+                    type: "video"
+                });
+                return;
+            }
+
             const newMessage = new Message({
                 room: data.room,
                 author: data.author,
@@ -231,11 +261,19 @@ io.on("connection", (socket) => {
                 timestamp: new Date()
             });
             await newMessage.save();
+            
+            // Emit to room members
+            socket.to(data.room).emit("video_recieve", data);
+            // Confirm to sender
+            socket.emit("upload_success", { type: "video", messageId: newMessage._id });
         } catch (error) {
             console.error('Error saving video:', error);
+            socket.emit("upload_error", { 
+                message: "Failed to save video. Please try again.",
+                type: "video",
+                error: error.message
+            });
         }
-
-        socket.to(data.room).emit("video_recieve", data);
     })
 
     socket.on("disconnect", () => {

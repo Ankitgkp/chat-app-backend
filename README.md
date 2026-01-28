@@ -1,5 +1,8 @@
 # Realtime Chat Application
 
+<img width="1504" height="740" alt="Screenshot 2026-01-29 at 3 39 38 AM" src="https://github.com/user-attachments/assets/cd3bf505-7759-4698-826b-a1ab1ad8cdc9" />
+
+
 A modern, full-featured real-time chat application built with React and Socket.io, featuring secure authentication, media sharing, and responsive design.
 
 ## 🚀 How to Use This App
